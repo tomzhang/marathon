@@ -5,7 +5,7 @@ import scala.sys.SystemProperties
 
 import mesosphere.marathon.io.storage.StorageProvider
 
-trait MarathonConf extends ScallopConf with ZookeeperConf {
+trait MarathonConf extends ScallopConf with ZookeeperConf with LogConf {
 
   lazy val mesosMaster = opt[String]("master",
     descr = "The URL of the Mesos master",
@@ -119,4 +119,11 @@ trait MarathonConf extends ScallopConf with ZookeeperConf {
     descr = "Mesos Authentication Secret",
     noshort = true
   )
+
+  lazy val storageBackend = opt[String]("storage_backend",
+    descr = "The backend used for storing Marathon state. Supported values are: [zk, log]",
+    noshort = true,
+    default = Some("zk")
+  )
+
 }

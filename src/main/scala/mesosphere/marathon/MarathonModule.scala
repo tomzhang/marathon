@@ -19,7 +19,7 @@ import com.google.inject.name.Names
 import com.twitter.common.base.Supplier
 import com.twitter.common.zookeeper.{ Candidate, CandidateImpl, ZooKeeperClient, Group => ZGroup }
 import org.apache.log4j.Logger
-import org.apache.mesos.state.{ State, ZooKeeperState }
+import org.apache.mesos.state.{ LogState, State, ZooKeeperState }
 import org.apache.zookeeper.ZooDefs
 
 import mesosphere.chaos.http.HttpConf
@@ -71,12 +71,29 @@ class MarathonModule(conf: MarathonConf, http: HttpConf, zk: ZooKeeperClient)
   @Provides
   @Singleton
   def provideMesosState(): State = {
-    new ZooKeeperState(
-      conf.zkHosts,
-      conf.zkTimeoutDuration.toMillis,
-      TimeUnit.MILLISECONDS,
-      conf.zooKeeperStatePath
-    )
+    conf.storageBackend() match {
+      case "zk" =>
+        new ZooKeeperState(
+          conf.zkHosts,
+          conf.zkTimeoutDuration.toMillis,
+          TimeUnit.MILLISECONDS,
+          conf.zooKeeperStatePath
+        )
+
+      case "log" =>
+        new LogState(
+          conf.zkHosts,
+          conf.zkTimeoutDuration.toMillis,
+          TimeUnit.MILLISECONDS,
+          conf.zkPath,
+          conf.logQuorum().toLong,
+          conf.logPath(),
+          conf.logDiffsBetweenSnapshots()
+        )
+
+      case x =>
+        throw new Exception(s"Unknown value for storageBackend: $x")
+    }
   }
 
   @Named("schedulerActor")
