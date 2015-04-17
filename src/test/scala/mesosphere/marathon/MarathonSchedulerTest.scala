@@ -11,7 +11,7 @@ import mesosphere.marathon.event.{ MesosStatusUpdateEvent, SchedulerRegisteredEv
 import mesosphere.marathon.health.HealthCheckManager
 import mesosphere.marathon.state.PathId._
 import mesosphere.marathon.state.{ AppDefinition, AppRepository, Timestamp }
-import mesosphere.marathon.tasks.{ TaskIdUtil, TaskQueue, TaskTracker }
+import mesosphere.marathon.tasks._
 import mesosphere.mesos.util.FrameworkIdUtil
 import org.apache.mesos.Protos._
 import org.apache.mesos.SchedulerDriver
@@ -51,7 +51,9 @@ class MarathonSchedulerTest extends TestKit(ActorSystem("System")) with Marathon
     eventBus = system.eventStream
     scheduler = new MarathonScheduler(
       eventBus,
-      new ObjectMapper,
+      new IterativeOfferMatcher(
+        config,
+        queue, tracker, new DefaultTaskFactory(taskIdUtil, tracker, config, new ObjectMapper())),
       probe.ref,
       repo,
       hcManager,
@@ -88,18 +90,18 @@ class MarathonSchedulerTest extends TestKit(ActorSystem("System")) with Marathon
 
     scheduler.resourceOffers(driver, offers)
 
-    val offersCaptor = ArgumentCaptor.forClass(classOf[java.util.List[OfferID]])
-    val taskInfosCaptor = ArgumentCaptor.forClass(classOf[java.util.List[TaskInfo]])
+    val offersCaptor = ArgumentCaptor.forClass(classOf[java.util.Collection[OfferID]])
+    val taskInfosCaptor = ArgumentCaptor.forClass(classOf[java.util.Collection[TaskInfo]])
     val marathonTaskCaptor = ArgumentCaptor.forClass(classOf[MarathonTask])
 
     verify(driver).launchTasks(offersCaptor.capture(), taskInfosCaptor.capture())
     verify(tracker).created(same(app.id), marathonTaskCaptor.capture())
 
     assert(1 == offersCaptor.getValue.size())
-    assert(offer.getId == offersCaptor.getValue.get(0))
+    assert(offer.getId == offersCaptor.getValue.asScala.head)
 
     assert(1 == taskInfosCaptor.getValue.size())
-    val taskInfoPortVar = taskInfosCaptor.getValue.get(0).getCommand.getEnvironment
+    val taskInfoPortVar = taskInfosCaptor.getValue.asScala.head.getCommand.getEnvironment
       .getVariablesList.asScala.find(v => v.getName == "PORT")
     assert(taskInfoPortVar.isDefined)
     val marathonTaskPort = marathonTaskCaptor.getValue.getPorts(0)
