@@ -34,8 +34,8 @@ class MarathonStoreTest extends MarathonSpec {
     val store = new MarathonStore[AppDefinition](config, state, registry, () => AppDefinition())
     val res = store.fetch("testApp")
 
-    verify(state).fetch("app:testApp")
     assert(Some(appDef) == Await.result(res, 5.seconds), "Should return the expected AppDef")
+    verify(state).fetch("app:testApp")
   }
 
   test("FetchFail") {
@@ -53,11 +53,11 @@ class MarathonStoreTest extends MarathonSpec {
     val store = new MarathonStore[AppDefinition](config, state, registry, () => AppDefinition())
     val res = store.fetch("testApp")
 
-    verify(state).fetch("app:testApp")
-
     intercept[StorageException] {
       Await.result(res, 5.seconds)
     }
+
+    verify(state).fetch("app:testApp")
   }
 
   test("Modify") {

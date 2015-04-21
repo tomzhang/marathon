@@ -4,6 +4,8 @@ import scala.concurrent.Future
 
 trait PersistenceStore[T] {
 
+  def clearCachedState(): Unit
+
   def fetch(key: String): Future[Option[T]]
 
   def store(key: String, value: T): Future[Option[T]] = modify(key)(_ => value)

@@ -17,7 +17,7 @@ import mesosphere.chaos.http.HttpConf
 import mesosphere.marathon.MarathonSchedulerActor._
 import mesosphere.marathon.Protos.MarathonTask
 import mesosphere.marathon.health.HealthCheckManager
-import mesosphere.marathon.state.{ AppDefinition, AppRepository, Migration, PathId, Timestamp }
+import mesosphere.marathon.state._
 import mesosphere.marathon.tasks.TaskTracker
 import mesosphere.marathon.upgrade.DeploymentManager.{ CancelDeployment, DeploymentStepInfo }
 import mesosphere.marathon.upgrade.DeploymentPlan
@@ -44,6 +44,8 @@ class MarathonSchedulerService @Inject() (
     frameworkIdUtil: FrameworkIdUtil,
     @Named(ModuleNames.NAMED_LEADER_ATOMIC_BOOLEAN) leader: AtomicBoolean,
     appRepository: AppRepository,
+    groupRepository: GroupRepository,
+    deploymentRepository: DeploymentRepository,
     taskTracker: TaskTracker,
     scheduler: MarathonScheduler,
     system: ActorSystem,
@@ -252,6 +254,9 @@ class MarathonSchedulerService @Inject() (
   override def onElected(abdicateCmd: ExceptionalCommand[JoinException]): Unit = {
     log.info("Elected (Leader Interface)")
     driver = Some(newDriver())
+    // clear all caches to prevent using out of date state
+    clearCaches()
+
     var migrationComplete = false
     try {
       //execute tasks, only the leader is allowed to
@@ -281,6 +286,13 @@ class MarathonSchedulerService @Inject() (
     }
   }
   //End Leader interface
+
+  private def clearCaches(): Unit = {
+    appRepository.clearCachedState()
+    groupRepository.clearCachedState()
+    deploymentRepository.clearCachedState()
+    taskTracker.clearCachedState()
+  }
 
   private def defeatLeadership(): Unit = {
     log.info("Defeat leadership")

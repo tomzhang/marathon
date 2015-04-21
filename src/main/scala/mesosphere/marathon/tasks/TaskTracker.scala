@@ -225,7 +225,7 @@ class TaskTracker @Inject() (
         for (task <- taskOption) {
           // Update the in-memory storage.
           val internalApp = apps.getOrElseUpdate(appId, new InternalApp(appId, TrieMap(), false))
-          internalApp.tasks += (taskKey -> task)
+          internalApp.tasks.putIfAbsent(taskKey, task)
         }
 
         taskOption

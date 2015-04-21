@@ -116,7 +116,6 @@ class MarathonSchedulerActor(
       healthCheckManager.removeAll()
       deploymentManager ! CancelAllDeployments
       lockedApps = Set.empty
-      taskTracker.clearCachedState()
       context.become(suspended)
 
     case Start => // ignore

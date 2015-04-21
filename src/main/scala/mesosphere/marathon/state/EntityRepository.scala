@@ -11,6 +11,8 @@ trait EntityRepository[T <: MarathonState[_, T]] extends StateMetrics {
 
   protected val ID_DELIMITER = ":"
 
+  def clearCachedState(): Unit = store.clearCachedState()
+
   /**
     * Returns the most recently stored entity with the supplied id.
     */

@@ -11,7 +11,7 @@ import com.twitter.common.zookeeper.Group.JoinException
 import mesosphere.chaos.http.HttpConf
 import mesosphere.marathon.Protos.StorageVersion
 import mesosphere.marathon.health.HealthCheckManager
-import mesosphere.marathon.state.{ AppRepository, Migration }
+import mesosphere.marathon.state.{ DeploymentRepository, GroupRepository, AppRepository, Migration }
 import mesosphere.marathon.tasks.TaskTracker
 import mesosphere.mesos.util.FrameworkIdUtil
 import mesosphere.util.BackToTheFuture.Timeout
@@ -72,6 +72,8 @@ class MarathonSchedulerServiceTest
   var frameworkIdUtil: FrameworkIdUtil = _
   var leader: AtomicBoolean = _
   var appRepository: AppRepository = _
+  var groupRepository: GroupRepository = _
+  var deploymentRepository: DeploymentRepository = _
   var taskTracker: TaskTracker = _
   var scheduler: MarathonScheduler = _
   var migration: Migration = _
@@ -86,6 +88,8 @@ class MarathonSchedulerServiceTest
     frameworkIdUtil = mock[FrameworkIdUtil]
     leader = mock[AtomicBoolean]
     appRepository = mock[AppRepository]
+    groupRepository = mock[GroupRepository]
+    deploymentRepository = mock[DeploymentRepository]
     taskTracker = mock[TaskTracker]
     scheduler = mock[MarathonScheduler]
     migration = mock[Migration]
@@ -105,6 +109,8 @@ class MarathonSchedulerServiceTest
       frameworkIdUtil,
       leader,
       appRepository,
+      groupRepository,
+      deploymentRepository,
       taskTracker,
       scheduler,
       system,
@@ -136,6 +142,8 @@ class MarathonSchedulerServiceTest
       frameworkIdUtil,
       leader,
       appRepository,
+      groupRepository,
+      deploymentRepository,
       taskTracker,
       scheduler,
       system,
@@ -167,6 +175,8 @@ class MarathonSchedulerServiceTest
       frameworkIdUtil,
       leader,
       appRepository,
+      groupRepository,
+      deploymentRepository,
       taskTracker,
       scheduler,
       system,
@@ -204,6 +214,8 @@ class MarathonSchedulerServiceTest
       frameworkIdUtil,
       leader,
       appRepository,
+      groupRepository,
+      deploymentRepository,
       taskTracker,
       scheduler,
       system,
@@ -237,6 +249,8 @@ class MarathonSchedulerServiceTest
       frameworkIdUtil,
       leader,
       appRepository,
+      groupRepository,
+      deploymentRepository,
       taskTracker,
       scheduler,
       system,
@@ -259,6 +273,6 @@ class MarathonSchedulerServiceTest
     schedulerService.onElected(mock[ExceptionalCommand[Group.JoinException]])
 
     awaitAssert { verify(candidate.get).offerLeadership(schedulerService) }
-    assert(schedulerService.isLeader == false)
+    assert(!schedulerService.isLeader)
   }
 }
