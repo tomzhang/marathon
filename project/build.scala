@@ -57,6 +57,7 @@ object MarathonBuild extends Build {
     ),
     javacOptions in Compile ++= Seq("-encoding", "UTF-8", "-source", "1.6", "-target", "1.6", "-Xlint:unchecked", "-Xlint:deprecation"),
     resolvers ++= Seq(
+      "Local Maven Repository" at "file://"+Path.userHome.absolutePath+"/.m2/repository",
       "Mesosphere Public Repo"    at "http://downloads.mesosphere.io/maven",
       "Twitter Maven2 Repository" at "http://maven.twttr.com/",
       "Typesafe Releases" at "http://repo.typesafe.com/typesafe/releases/",
@@ -133,6 +134,7 @@ object Dependencies {
     sprayClient % "compile",
     sprayHttpx % "compile",
     chaos % "compile",
+    mesos % "compile",
     mesosUtils % "compile",
     jacksonCaseClass % "compile",
     twitterCommons % "compile",
@@ -189,6 +191,7 @@ object Dependency {
   val sprayHttpx = "io.spray" %% "spray-httpx" % V.Spray
   val playJson = "com.typesafe.play" %% "play-json" % V.PlayJson
   val chaos = "mesosphere" %% "chaos" % V.Chaos
+  val mesos = "org.apache.mesos" % "mesos" % "0.22.1-rc4"
   val mesosUtils = "mesosphere" %% "mesos-utils" % V.MesosUtils
   val jacksonCaseClass = "mesosphere" %% "jackson-case-class-module" % V.JacksonCCM
   val jerseyServlet =  "com.sun.jersey" % "jersey-servlet" % V.Jersey
