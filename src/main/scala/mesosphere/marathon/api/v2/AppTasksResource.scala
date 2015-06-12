@@ -11,7 +11,7 @@ import mesosphere.marathon.api.v2.json.EnrichedTask
 import mesosphere.marathon.api.{ EndpointsHelper, RestResource }
 import mesosphere.marathon.health.HealthCheckManager
 import mesosphere.marathon.state.PathId._
-import mesosphere.marathon.state.{ GroupManager, PathId }
+import mesosphere.marathon.state.{ Timestamp, GroupManager, PathId }
 import mesosphere.marathon.tasks.TaskTracker
 import mesosphere.marathon.{ MarathonConf, MarathonSchedulerService }
 
@@ -88,10 +88,33 @@ class AppTasksResource @Inject() (service: MarathonSchedulerService,
                 @PathParam("taskId") id: String,
                 @QueryParam("scale") scale: Boolean = false): Response = {
     val pathId = appId.toRootPath
+
+    import mesosphere.util.ThreadPoolContext.context
+
     if (taskTracker.contains(pathId)) {
       val tasks = taskTracker.get(pathId)
       tasks.find(_.getId == id).fold(unknownTask(id)) { task =>
-        service.killTasks(pathId, Seq(task), scale)
+        if (scale) {
+          service.getApp(pathId) match {
+            case Some(app) =>
+              val future = groupManager.group(app.id.parent).map {
+                case Some(group) =>
+                  val newNumInstances: Integer = if (scale) app.instances - 1 else app.instances
+                  val newApp = app.copy(version = Timestamp.now(), instances = newNumInstances)
+                  val deploymentPlan = result(groupManager.updateApp(
+                    pathId, _ => newApp, newApp.version, force = false, toKill = Set(task)))
+                  deploymentResult(deploymentPlan)
+
+                case None => unknownGroup(app.id.parent)
+              }
+              result(future)
+
+            case None => unknownApp(pathId)
+          }
+        }
+        else {
+          service.killTasks(pathId, Seq(task), scale = false)
+        }
         ok(Map("task" -> task))
       }
     }

@@ -6,6 +6,7 @@ import javax.inject.{ Inject, Named }
 
 import akka.event.EventStream
 import com.google.inject.Singleton
+import mesosphere.marathon.Protos.MarathonTask
 import mesosphere.marathon.api.{ BeanValidation, ModelValidation }
 import mesosphere.marathon.event.{ EventModule, GroupChangeFailed, GroupChangeSuccess }
 import mesosphere.marathon.io.PathFun
@@ -113,18 +114,20 @@ class GroupManager @Singleton @Inject() (
     appId: PathId,
     fn: AppDefinition => AppDefinition,
     version: Timestamp = Timestamp.now(),
-    force: Boolean = false): Future[DeploymentPlan] =
-    upgrade(appId.parent, _.updateApp(appId, fn, version), version, force)
+    force: Boolean = false,
+    toKill: Set[MarathonTask] = Set.empty): Future[DeploymentPlan] =
+    upgrade(appId.parent, _.updateApp(appId, fn, version), version, force, Map(appId -> toKill))
 
   private def upgrade(
     gid: PathId,
     change: Group => Group,
     version: Timestamp = Timestamp.now(),
-    force: Boolean = false): Future[DeploymentPlan] = serializeUpdates {
+    force: Boolean = false,
+    toKill: Map[PathId, Set[MarathonTask]] = Map.empty): Future[DeploymentPlan] = serializeUpdates {
     log.info(s"Upgrade id:$gid version:$version with force:$force")
 
     def deploy(from: Group, to: Group, resolve: Seq[ResolveArtifacts]): Future[DeploymentPlan] = {
-      val plan = DeploymentPlan(from, to, resolve, version)
+      val plan = DeploymentPlan(from, to, resolve, version, toKill)
       scheduler.deploy(plan, force).map(_ => plan)
     }
 

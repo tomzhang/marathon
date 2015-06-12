@@ -10,7 +10,6 @@ import mesosphere.marathon.health.HealthCheckManager
 import mesosphere.marathon.io.storage.StorageProvider
 import mesosphere.marathon.state._
 import mesosphere.marathon.tasks.{ MarathonTasks, TaskQueue, TaskTracker }
-import mesosphere.marathon.upgrade.DeploymentActor.Finished
 import mesosphere.marathon.upgrade.DeploymentManager.{ DeploymentFinished, DeploymentStepInfo }
 import mesosphere.marathon.{ MarathonSpec, SchedulerActions }
 import mesosphere.marathon.Protos.MarathonTask
@@ -86,9 +85,9 @@ class DeploymentActorTest
     // the AppDefinition is never used, so it does not mater which one we return
     when(repo.store(any())).thenReturn(Future.successful(AppDefinition()))
 
-    when(driver.killTask(TaskID(task1_2.getId))).thenAnswer(new Answer[Status] {
+    when(driver.killTask(TaskID(task1_1.getId))).thenAnswer(new Answer[Status] {
       def answer(invocation: InvocationOnMock): Status = {
-        system.eventStream.publish(MesosStatusUpdateEvent("", "task1_2", "TASK_KILLED", "", app1.id, "", Nil, app1New.version.toString))
+        system.eventStream.publish(MesosStatusUpdateEvent("", "task1_1", "TASK_KILLED", "", app1.id, "", Nil, app1New.version.toString))
         Status.DRIVER_RUNNING
       }
     })
@@ -155,7 +154,7 @@ class DeploymentActorTest
       managerProbe.expectMsg(5.seconds, DeploymentFinished(plan))
 
       verify(scheduler).startApp(driver, app3.copy(instances = 0))
-      verify(driver, times(1)).killTask(TaskID(task1_2.getId))
+      verify(driver, times(1)).killTask(TaskID(task1_1.getId))
       verify(scheduler).stopApp(driver, app4)
     }
     finally {
