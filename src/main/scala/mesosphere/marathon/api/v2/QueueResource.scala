@@ -26,7 +26,7 @@ class QueueResource @Inject() (
       case (task, delay) =>
         Json.obj(
           "app" -> task.app,
-          "count" -> task.count.get(),
+          "count" -> task.count,
           "delay" -> Json.obj(
             "overdue" -> delay.isOverdue()
           )

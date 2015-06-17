@@ -81,8 +81,7 @@ class MarathonModule(conf: MarathonConf, http: HttpConf, zk: ZooKeeperClient)
     bind(classOf[TaskTracker]).in(Scopes.SINGLETON)
     bind(classOf[TaskQueue]).in(Scopes.SINGLETON)
     bind(classOf[TaskFactory]).to(classOf[DefaultTaskFactory]).in(Scopes.SINGLETON)
-    bind(classOf[IterativeOfferMatcherMetrics]).in(Scopes.SINGLETON)
-    bind(classOf[OfferMatcher]).to(classOf[IterativeOfferMatcher]).in(Scopes.SINGLETON)
+    bind(classOf[GroupManager]).in(Scopes.SINGLETON)
 
     bind(classOf[HealthCheckManager]).to(classOf[MarathonHealthCheckManager]).asEagerSingleton()
 
@@ -114,10 +113,6 @@ class MarathonModule(conf: MarathonConf, http: HttpConf, zk: ZooKeeperClient)
 
     system.actorOf(Props(new HttpEventStreamActor(leaderInfo, metrics, handleStreamProps)), "HttpEventStream")
   }
-
-  @Provides
-  @Singleton
-  def provideIterativeOfferMatcherConfig(): IterativeOfferMatcherConfig = conf
 
   @Provides
   @Singleton

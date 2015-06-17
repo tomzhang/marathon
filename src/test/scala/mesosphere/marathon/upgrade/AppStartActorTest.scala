@@ -33,7 +33,7 @@ class AppStartActorTest
   before {
     driver = mock[SchedulerDriver]
     scheduler = mock[SchedulerActions]
-    taskQueue = new TaskQueue
+    taskQueue = mock[TaskQueue]
     taskTracker = new TaskTracker(new InMemoryStore, mock[MarathonConf], new Metrics(new MetricRegistry))
   }
 

@@ -3,13 +3,11 @@ package mesosphere.marathon
 import akka.actor.ActorSystem
 import akka.event.EventStream
 import akka.testkit.{ TestKit, TestProbe }
-import com.codahale.metrics.MetricRegistry
-import com.fasterxml.jackson.databind.ObjectMapper
 import com.google.common.collect.Lists
 import mesosphere.marathon.Protos.MarathonTask
+import mesosphere.marathon.core.base.DefaultClock
 import mesosphere.marathon.event.{ MesosStatusUpdateEvent, SchedulerRegisteredEvent, SchedulerReregisteredEvent }
 import mesosphere.marathon.health.HealthCheckManager
-import mesosphere.marathon.metrics.Metrics
 import mesosphere.marathon.state.PathId._
 import mesosphere.marathon.state.{ AppDefinition, AppRepository, Timestamp }
 import mesosphere.marathon.tasks._
@@ -42,7 +40,7 @@ class MarathonSchedulerTest extends TestKit(ActorSystem("System")) with Marathon
     repo = mock[AppRepository]
     hcManager = mock[HealthCheckManager]
     tracker = mock[TaskTracker]
-    queue = spy(new TaskQueue)
+    queue = mock[TaskQueue]
     frameworkIdUtil = mock[FrameworkIdUtil]
     config = defaultConfig(maxTasksPerOffer = 10)
     taskIdUtil = TaskIdUtil
@@ -50,19 +48,10 @@ class MarathonSchedulerTest extends TestKit(ActorSystem("System")) with Marathon
     eventBus = system.eventStream
     scheduler = new MarathonScheduler(
       eventBus,
-      new IterativeOfferMatcher(
-        config,
-        queue, tracker, new DefaultTaskFactory(taskIdUtil, tracker, config, new ObjectMapper()),
-        new IterativeOfferMatcherMetrics(new Metrics(new MetricRegistry))
-      ),
-      probe.ref,
-      repo,
-      hcManager,
-      tracker,
-      queue,
+      new DefaultClock,
+      offerProcessor = ???,
+      taskStatusEmitter = ???,
       frameworkIdUtil,
-      taskIdUtil,
-      mock[ActorSystem],
       config,
       new SchedulerCallbacks {
         override def disconnected(): Unit = {}
@@ -220,7 +209,8 @@ class MarathonSchedulerTest extends TestKit(ActorSystem("System")) with Marathon
       .build()
 
     val task = Protos.MarathonTask.newBuilder.setId(taskId).setVersion(taskVersion).build()
-    for (_ <- 0 until 20) queue.rateLimiter.addDelay(app)
+    // FIXME: uncomment this once the refactoring is done
+    //    for (_ <- 0 until 20) queue.rateLimiter.addDelay(app)
 
     when(tracker.fetchTask(app.id, taskId)).thenReturn(None)
     when(tracker.running(app.id, status)).thenReturn(Future.successful(task))
@@ -232,7 +222,8 @@ class MarathonSchedulerTest extends TestKit(ActorSystem("System")) with Marathon
 
     probe.expectMsgType[MesosStatusUpdateEvent]
 
-    awaitAssert(queue.rateLimiter.getDelay(app).isOverdue())
+    // FIXME: uncomment this once the refactoring is done
+    //    awaitAssert(queue.rateLimiter.getDelay(app).isOverdue())
   }
 
   // Currently does not work because of the injection used in MarathonScheduler.callbacks

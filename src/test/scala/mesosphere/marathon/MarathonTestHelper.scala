@@ -2,15 +2,12 @@ package mesosphere.marathon
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.github.fge.jackson.JsonLoader
-import com.github.fge.jsonschema.main.{ JsonSchema, JsonSchemaFactory }
-
-import org.apache.mesos.Protos.Offer
-import org.rogach.scallop.ScallopConf
-
+import com.github.fge.jsonschema.main.JsonSchemaFactory
 import mesosphere.marathon.state.AppDefinition
 import mesosphere.marathon.state.PathId._
-import mesosphere.marathon.tasks.IterativeOfferMatcher
 import mesosphere.mesos.protos._
+import org.apache.mesos.Protos.Offer
+import org.rogach.scallop.ScallopConf
 
 trait MarathonTestHelper {
 
@@ -101,9 +98,8 @@ trait MarathonTestHelper {
   )
 
   def getSchemaMapper() = {
-    import com.fasterxml.jackson.module.scala.DefaultScalaModule
     import com.fasterxml.jackson.annotation.JsonInclude
-
+    import com.fasterxml.jackson.module.scala.DefaultScalaModule
     import mesosphere.jackson.CaseClassModule
     import mesosphere.marathon.api.v2.json.MarathonModule
 

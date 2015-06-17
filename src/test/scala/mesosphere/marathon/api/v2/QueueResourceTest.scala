@@ -12,7 +12,7 @@ class QueueResourceTest extends MarathonSpec with Matchers {
 
   // regression test for #1210
   test("return well formatted JSON") {
-    val queue = new TaskQueue
+    val queue = mock[TaskQueue]
     val app1 = AppDefinition(id = "app1".toRootPath)
     val app2 = AppDefinition(id = "app2".toRootPath)
     val resource = new QueueResource(queue, mock[MarathonConf])
@@ -20,8 +20,8 @@ class QueueResourceTest extends MarathonSpec with Matchers {
     queue.add(app1, 4)
     queue.add(app2, 2)
 
-    for (_ <- 0 until 10)
-      queue.rateLimiter.addDelay(app2)
+    //    for (_ <- 0 until 10)
+    //      queue.rateLimiter.addDelay(app2)
 
     val json = Json.parse(resource.index().getEntity.toString)
 
