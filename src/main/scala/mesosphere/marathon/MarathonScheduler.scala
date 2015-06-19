@@ -19,6 +19,7 @@ import org.apache.mesos.{ Scheduler, SchedulerDriver }
 
 import scala.collection.JavaConverters._
 import scala.concurrent.{ Await, Future }
+import scala.util.control.NonFatal
 import scala.util.{ Failure, Success }
 
 trait SchedulerCallbacks {
@@ -187,19 +188,22 @@ class MarathonScheduler @Inject() (
 
   override def error(driver: SchedulerDriver, message: String) {
     log.warn("Error: %s".format(message))
-    suicide()
+    suicide(message)
   }
 
-  private def suicide(): Unit = {
-    log.fatal("Committing suicide")
+  private def suicide(message: String): Unit = {
+    log.fatal(s"Scheduler reports: $message. Committing suicide!")
 
-    //scalastyle:off magic.number
+    // Depending on the cause of this error, Marathon is marked completed and can never re-register
+    // until the leading Mesos master process is kicked over, or the persisted FrameworkID is manually deleted.
+    // Currently, it's pretty hard to disambiguate this error from other causes of framework errors.
+    // Watch MESOS-2522 which will add a reason field for framework errors to help with this.
+    // For now the frameworkId is removed for all messages.
+    Await.ready(frameworkIdUtil.expunge, config.zkTimeoutDuration)
+
     // Asynchronously call sys.exit() to avoid deadlock due to the JVM shutdown hooks
-    Future {
-      sys.exit(9)
-    } onFailure {
-      case t: Throwable => log.fatal("Exception while committing suicide", t)
-    }
+    // scalastyle:off magic.number
+    Future(sys.exit(9)).onFailure { case NonFatal(t) => log.fatal("Exception while committing suicide", t) }
   }
 
   private def postEvent(status: TaskStatus, task: MarathonTask): Unit = {
