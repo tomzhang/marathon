@@ -188,22 +188,32 @@ class MarathonScheduler @Inject() (
 
   override def error(driver: SchedulerDriver, message: String) {
     log.warn("Error: %s".format(message))
-    suicide(message)
-  }
 
-  private def suicide(message: String): Unit = {
-    log.fatal(s"Scheduler reports: $message. Committing suicide!")
-
-    // Depending on the cause of this error, Marathon is marked completed and can never re-register
-    // until the leading Mesos master process is kicked over, or the persisted FrameworkID is manually deleted.
     // Currently, it's pretty hard to disambiguate this error from other causes of framework errors.
     // Watch MESOS-2522 which will add a reason field for framework errors to help with this.
     // For now the frameworkId is removed for all messages.
-    Await.ready(frameworkIdUtil.expunge, config.zkTimeoutDuration)
+    val removeFrameworkId = true
+    suicide(removeFrameworkId)
+  }
+
+  /**
+    * Exit the JVM process.
+    * Optionally deleting the frameworkId. Depending on the cause of this error,
+    * Marathon is marked completed and can never re-register until the leading
+    * Mesos master process is kicked over, or the persisted FrameworkID is manually deleted.
+    *
+    * @param removeFrameworkId if true delete the stored frameworkId.
+    */
+  private def suicide(removeFrameworkId: Boolean): Unit = {
+    log.fatal(s"Committing suicide!")
+
+    if (removeFrameworkId) Await.ready(frameworkIdUtil.expunge, config.zkTimeoutDuration)
 
     // Asynchronously call sys.exit() to avoid deadlock due to the JVM shutdown hooks
     // scalastyle:off magic.number
-    Future(sys.exit(9)).onFailure { case NonFatal(t) => log.fatal("Exception while committing suicide", t) }
+    Future(sys.exit(9)).onFailure {
+      case NonFatal(t) => log.fatal("Exception while committing suicide", t)
+    }
   }
 
   private def postEvent(status: TaskStatus, task: MarathonTask): Unit = {
