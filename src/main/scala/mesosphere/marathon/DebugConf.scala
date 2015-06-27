@@ -2,9 +2,9 @@ package mesosphere.marathon
 
 import javax.inject.Provider
 
-import com.google.inject.{ Scopes, AbstractModule }
+import com.google.inject.AbstractModule
 import com.google.inject.matcher.{ AbstractMatcher, Matchers }
-import mesosphere.marathon.metrics.Metrics
+import mesosphere.marathon.metrics.{ MetricPrefixes, Metrics }
 import org.aopalliance.intercept.{ MethodInterceptor, MethodInvocation }
 import org.apache.log4j.{ Level, Logger }
 import org.rogach.scallop.ScallopConf
@@ -39,7 +39,7 @@ class DebugModule(conf: DebugConf) extends AbstractModule {
     override def invoke(in: MethodInvocation): AnyRef = {
       val metrics: Metrics = metricsProvider.get
 
-      metrics.timed(metrics.name("service", in)) {
+      metrics.timed(metrics.name(MetricPrefixes.SERVICE, in)) {
         in.proceed
       }
     }
@@ -52,7 +52,7 @@ class DebugModule(conf: DebugConf) extends AbstractModule {
     override def invoke(in: MethodInvocation): AnyRef = {
       val className = metrics.get.className(in.getThis.getClass)
       val logger = Logger.getLogger(className)
-      val method = s"""${className}.${in.getMethod.getName}(${in.getArguments.mkString(", ")})"""
+      val method = s"""$className.${in.getMethod.getName}(${in.getArguments.mkString(", ")})"""
       logger.trace(s">>> $method")
       val result = in.proceed()
       logger.trace(s"<<< $method")
@@ -69,7 +69,7 @@ class DebugModule(conf: DebugConf) extends AbstractModule {
 
   override def configure(): Unit = {
     //set trace log level
-    conf.logLevel.get.foreach(level => Logger.getRootLogger.setLevel(Level.toLevel(level.toUpperCase())))
+    conf.logLevel.get.foreach(level => Logger.getRootLogger.setLevel(Level.toLevel(level.toUpperCase)))
 
     //add behaviors
     val metricsProvider = getProvider(classOf[Metrics])

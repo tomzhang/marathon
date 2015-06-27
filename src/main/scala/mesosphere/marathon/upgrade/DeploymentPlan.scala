@@ -207,6 +207,7 @@ object DeploymentPlan {
     }.to[Seq]
   }
 
+  //scalastyle:off method.length
   def apply(
     original: Group,
     target: Group,

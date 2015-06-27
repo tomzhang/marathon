@@ -4,7 +4,7 @@ import java.util
 
 import com.google.inject.{ Inject }
 import mesosphere.marathon.Protos.MarathonTask
-import mesosphere.marathon.metrics.Metrics
+import mesosphere.marathon.metrics.{ MetricPrefixes, Metrics }
 import mesosphere.marathon.metrics.Metrics.{ Timer, Histogram, Meter }
 import mesosphere.marathon.state.AppDefinition
 import mesosphere.marathon.tasks.TaskFactory.CreatedTask
@@ -15,6 +15,8 @@ import org.slf4j.LoggerFactory
 
 import scala.collection.JavaConverters._
 import scala.collection.immutable.Seq
+
+//scalastyle:off magic.number
 
 trait OfferMatcher {
   /**
@@ -37,7 +39,7 @@ trait IterativeOfferMatcherConfig extends ScallopConf {
 }
 
 class IterativeOfferMatcherMetrics @Inject() (metrics: Metrics) {
-  val prefix: String = "service"
+  def prefix: String = MetricPrefixes.SERVICE
 
   val tasksLaunched: Meter = metrics.meter(metrics.name(prefix, getClass, "tasks-launched"))
   val tasksLaunchedPerOffer: Histogram = metrics.histogram(metrics.name(prefix, getClass, "tasks-launched-per-offer"))
@@ -120,6 +122,7 @@ class IterativeOfferMatcher @Inject() (
     * * new tasks are registered in the taskTracker
     * * scheduled tasks are removed from the taskQueue
     */
+  //scalastyle:off method.length
   private[tasks] def calculateOfferUsage(offersList: Iterable[Offer]): OfferUsages = {
     log.info("started processing {} offers, launching at most {} tasks per offer and {} tasks in total",
       Seq(offersList.size, maxTasksPerOffer, maxTasksPerCycle).map(_.asInstanceOf[AnyRef]): _*)

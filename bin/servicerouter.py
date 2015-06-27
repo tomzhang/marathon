@@ -1,19 +1,23 @@
 #!/usr/bin/env python2
 
-"""Updates haproxy config based on marathon.
+"""Overview:
+  The servicerouter is a replacement for the haproxy-marathon-bridge.
+  It reads the Marathon task information and dynamically generates
+  haproxy configuration details.
+
+  To gather the task information, the servicerouter needs to know where
+  to find Marathon. The service configuration details are stored in Marathon
+  environment variables.
+
+  Every service port in Marathon can be configured independently.
+
 
 Features:
   - Virtual Host aliases for services
   - Soft restart of haproxy
   - SSL Termination
-  - (Optional): real-time update from marathon events
+  - (Optional): real-time update from Marathon events
 
-Usage:
-./servicerouter.py --listening http://192.168.0.1:4002 -m http://marathon1
-./servicerouter.py -m http://marathon1 -m http://marathon2:8080 -m http://marathon3:8080
-
-HA Usage:
-  TODO (Run on multiple hosts, send traffic to all)
 
 Configuration:
   Service configuration lives in marathon via environment variables.
@@ -21,40 +25,99 @@ Configuration:
   To run in listening mode you must also specify the address + port at
   which the servicerouter can be reached by marathon.
 
-  Every service port in marathon can be configured independently.
 
-  Environment Variables:
-    HAPROXY_GROUP
-      Only servicerouter instances which are members of the given group will
-      point to the service. Service routers with the gorup '*' will collect all
-      groups.
+Usage:
+  $ servicerouter.py --marathon http://marathon1:8080 --haproxy-config /etc/haproxy/haproxy.cfg
 
-    HAPROXY_{n}_VHOST
-      HTTP Virtual Host proxy hostname to catch
-      Ex: HAPROXY_0_VHOST = 'marathon.mesosphere.com'
+  The user that executes servicerouter must have the permission to reload
+  haproxy.
 
-    HAPROXY_{n}_STICKY
-      Use sticky request routing for the service
-      Ex: HAPROXY_0_STICKY = true
 
-    HAPROXY_{n}_REDIRECT_TO_HTTPS
-      Redirect HTTP traffic to https
-      Ex: HAPROXY_0_REDIRECT_TO_HTTPS = true
+Environment Variables:
+  HAPROXY_GROUP
+    The group of servicerouter instances that point to the service.
+    Service routers with the group '*' will collect all groups.
 
-    HAPROXY_{n}_SSL_CERT
-      Use the given SSL cert for TLS/SSL traffic
-      Ex: HAPROXY_0_SSL_CERT = '/etc/ssl/certs/marathon.mesosphere.com'
+  HAPROXY_{n}_VHOST
+    The Marathon HTTP Virtual Host proxy hostname to gather.
+    Ex: HAPROXY_0_VHOST = 'marathon.mesosphere.com'
 
-    HAPROXY_{n}_BIND_ADDR
-      Bind to the specific address for the service
-      Ex: HAPROXY_0_BIND_ADDR = '10.0.0.42'
+  HAPROXY_{n}_STICKY
+    Enable sticky request routing for the service.
+    Ex: HAPROXY_0_STICKY = true
 
-Operational  Notes:
+  HAPROXY_{n}_REDIRECT_TO_HTTPS
+    Redirect HTTP traffic to HTTPS.
+    Ex: HAPROXY_0_REDIRECT_TO_HTTPS = true
+
+  HAPROXY_{n}_SSL_CERT
+    Enable the given SSL certificate for TLS/SSL traffic.
+    Ex: HAPROXY_0_SSL_CERT = '/etc/ssl/certs/marathon.mesosphere.com'
+
+  HAPROXY_{n}_BIND_ADDR
+    Bind to the specific address for the service.
+    Ex: HAPROXY_0_BIND_ADDR = '10.0.0.42'
+
+  HAPROXY_{n}_MODE
+    Set the connection mode to either TCP or HTTP. The default is TCP.
+    Ex: HAPROXY_0_MODE = 'http'
+
+
+Templates:
+  The servicerouter searches for configuration files in the templates/ directory.
+  The templates/ directory contains servicerouter configuration settings and
+  example usage. The templates/ directory is located in a relative path from
+  where the script is run.
+
+  HAPROXY_HEAD
+    The head of the haproxy config. This contains global settings
+    and defaults.
+
+  HAPROXY_HTTP_FRONTEND_HEAD
+    An HTTP frontend that binds to port *:80 by default and gathers
+    all virtual hosts as defined by the HAPROXY_{n}_VHOST variable.
+
+  HAPROXY_HTTPS_FRONTEND_HEAD
+    An HTTPS frontend for encrypted connections that binds to port *:443 by
+    default and gathers all virtual hosts as defined by the
+    HAPROXY_{n}_VHOST variable. You must modify this file to
+    include your certificate.
+
+  HAPROXY_BACKEND_REDIRECT_HTTP_TO_HTTPS
+    This template is used with backends where the
+    HAPROXY_{n}_REDIRECT_TO_HTTPS environment variable is defined.
+
+  HAPROXY_BACKEND_HTTP_OPTIONS
+    Sets HTTP headers, for example X-Forwarded-For and X-Forwarded-Proto.
+
+  HAPROXY_BACKEND_STICKY_OPTIONS
+    Sets a cookie for services where HAPROXY_{n}_STICKY is true.
+
+  HAPROXY_FRONTEND_HEAD
+    Defines the address and port to bind to.
+
+  HAPROXY_BACKEND_HEAD
+    Defines the type of load balancing, roundrobin by default,
+    and connection mode, TCP or HTTP.
+
+  HAPROXY_HTTP_FRONTEND_ACL
+    The ACL that glues a backend to the corresponding virtual host
+    of the HAPROXY_HTTP_FRONTEND_HEAD.
+
+  HAPROXY_HTTPS_FRONTEND_ACL
+    The ACL that performs the SNI based hostname matching
+    for the HAPROXY_HTTPS_FRONTEND_HEAD.
+
+  HAPROXY_BACKEND_SERVER_OPTIONS
+    The options for each physical server added to a backend.
+
+  HAPROXY_FRONTEND_BACKEND_GLUE
+    This option glues the backend to the frontend.
+
+
+Operational Notes:
   - When a node in listening mode fails, remove the callback url for that
-    node in marathon by hand.
-
-TODO:
-  More reliable way to ping, restart haproxy (Install the right reloader)
+    node in marathon.
 """
 
 from logging.handlers import SysLogHandler
@@ -629,12 +692,17 @@ class MarathonEventSubscriber(object):
 def get_arg_parser():
     parser = argparse.ArgumentParser(
         description="Marathon HAProxy Service Router")
+    parser.add_argument("--longhelp",
+                        help="Print out configuration details",
+                        action="store_true"
+                        )
     parser.add_argument("--marathon", "-m",
-                        required=True,
                         nargs="+",
-                        help="Marathon endpoint, eg. -m http://marathon1:8080 -m http://marathon2:8080")
+                        help="Marathon endpoint, eg. -m http://marathon1:8080 -m http://marathon2:8080"
+                        )
     parser.add_argument("--listening", "-l",
-                        help="The HTTP address that marathon can call this script back at (http://lb1:8080)")
+                        help="The HTTP address that marathon can call this script back at (http://lb1:8080)"
+                        )
     parser.add_argument("--syslog-socket",
                         help="Socket to write syslog messages to",
                         default="/var/run/syslog" if sys.platform == "darwin" else "/dev/log"
@@ -686,7 +754,17 @@ def setup_logging(syslog_socket):
 
 if __name__ == '__main__':
     # Process arguments
-    args = get_arg_parser().parse_args()
+    arg_parser = get_arg_parser()
+    args = arg_parser.parse_args()
+
+    # Print the long help text if flag is set
+    if args.longhelp:
+      print __doc__
+      sys.exit()
+    # otherwise make sure that a Marathon URL was specified
+    else:
+      if args.marathon is None:
+        arg_parser.error('argument --marathon/-m is required')
 
     #Setup logging
     setup_logging(args.syslog_socket)

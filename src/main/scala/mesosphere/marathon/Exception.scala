@@ -2,6 +2,8 @@ package mesosphere.marathon
 
 import mesosphere.marathon.state.PathId
 
+//scalastyle:off null
+
 class Exception(msg: String, cause: Throwable = null) extends scala.RuntimeException(msg, cause)
 
 class UnknownAppException(id: PathId) extends Exception(s"App '$id' does not exist")
@@ -24,8 +26,6 @@ case class UpgradeInProgressException(msg: String) extends Exception(msg)
 case class CanceledActionException(msg: String) extends Exception(msg)
 
 case class ConflictingChangeException(msg: String) extends Exception(msg)
-
-case class LostLeadershipException(msg: String) extends Exception(msg)
 
 /*
  * Task upgrade specific exceptions

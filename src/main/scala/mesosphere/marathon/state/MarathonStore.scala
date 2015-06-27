@@ -1,7 +1,7 @@
 package mesosphere.marathon.state
 
 import mesosphere.marathon.StoreCommandFailedException
-import mesosphere.marathon.metrics.Metrics
+import mesosphere.marathon.metrics.{ MetricPrefixes, Metrics }
 import mesosphere.util.{ LockManager, ThreadPoolContext }
 import mesosphere.util.state.PersistentStore
 import mesosphere.marathon.metrics.Metrics.Histogram
@@ -21,10 +21,11 @@ class MarathonStore[S <: MarathonState[_, S]](
   private[this] val log = LoggerFactory.getLogger(getClass)
 
   private[this] lazy val lockManager = LockManager.create()
+  protected[this] def metricsPrefix = MetricPrefixes.SERVICE
   protected[this] val bytesRead: Histogram =
-    metrics.histogram(metrics.name("service", getClass, s"${ct.runtimeClass.getSimpleName}.read-data-size"))
+    metrics.histogram(metrics.name(metricsPrefix, getClass, s"${ct.runtimeClass.getSimpleName}.read-data-size"))
   protected[this] val bytesWritten: Histogram =
-    metrics.histogram(metrics.name("service", getClass, s"${ct.runtimeClass.getSimpleName}.write-data-size"))
+    metrics.histogram(metrics.name(metricsPrefix, getClass, s"${ct.runtimeClass.getSimpleName}.write-data-size"))
 
   def fetch(key: String): Future[Option[S]] = {
     store.load(prefix + key)
@@ -64,7 +65,7 @@ class MarathonStore[S <: MarathonState[_, S]](
     store.allIds()
       .map {
         _.collect {
-          case name if name startsWith prefix => name.replaceFirst(prefix, "")
+          case name: String if name startsWith prefix => name.replaceFirst(prefix, "")
         }
       }
       .recover(exceptionTransform(s"Could not list names for ${ct.runtimeClass.getSimpleName}"))

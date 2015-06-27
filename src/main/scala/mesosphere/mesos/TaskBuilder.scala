@@ -7,12 +7,13 @@ import com.google.protobuf.ByteString
 import mesosphere.marathon.Protos.HealthCheckDefinition.Protocol
 import mesosphere.marathon._
 import mesosphere.marathon.state.{ AppDefinition, PathId }
+import mesosphere.marathon.health.HealthCheck
 import mesosphere.marathon.tasks.TaskTracker
 import mesosphere.mesos.ResourceMatcher.ResourceMatch
 import mesosphere.mesos.protos.{ RangesResource, Resource, ScalarResource }
 import org.apache.log4j.Logger
 import org.apache.mesos.Protos.Environment._
-import org.apache.mesos.Protos._
+import org.apache.mesos.Protos.{ HealthCheck => _, _ }
 
 import scala.collection.JavaConverters._
 import scala.collection.immutable.Seq
@@ -51,8 +52,10 @@ class TaskBuilder(app: AppDefinition,
       }
   }
 
+  //TODO: fix style issue and enable this scalastyle check
+  //scalastyle:off cyclomatic.complexity method.length
   private def build(offer: Offer, cpuRole: String, memRole: String, diskRole: String,
-                    portsResources: Seq[RangesResource]) = {
+                    portsResources: Seq[RangesResource]): Some[(TaskInfo, Seq[Long])] = {
 
     val executor: Executor = if (app.executor == "") {
       config.executor
@@ -99,7 +102,7 @@ class TaskBuilder(app: AppDefinition,
         val portMappings = c.docker.map { d =>
           d.portMappings.map { pms =>
             pms zip ports map {
-              case (mapping, port) => {
+              case (mapping, port) =>
                 // Use case: containerPort = 0 and hostPort = 0
                 //
                 // For apps that have their own service registry and require p2p communication,
@@ -114,7 +117,6 @@ class TaskBuilder(app: AppDefinition,
                 else {
                   mapping.copy(hostPort = port.toInt)
                 }
-              }
             }
           }
         }
@@ -126,7 +128,7 @@ class TaskBuilder(app: AppDefinition,
             }
           )
         }
-        containerWithPortMappings.toMesos
+        containerWithPortMappings.toMesos()
       }
 
     executor match {
@@ -155,7 +157,7 @@ class TaskBuilder(app: AppDefinition,
     // are currently implemented in the Mesos health check helper program.
     val mesosHealthChecks: Set[org.apache.mesos.Protos.HealthCheck] =
       app.healthChecks.collect {
-        case healthCheck if healthCheck.protocol == Protocol.COMMAND => healthCheck.toMesos
+        case healthCheck: HealthCheck if healthCheck.protocol == Protocol.COMMAND => healthCheck.toMesos
       }
 
     if (mesosHealthChecks.size > 1) {
@@ -198,8 +200,11 @@ object TaskBuilder {
     app.args.foreach { argv =>
       builder.setShell(false)
       builder.addAllArguments(argv.asJava)
+      //mesos command executor expects cmd and arguments
+      if (app.container.isEmpty) builder.setValue(argv.head)
     }
 
+    //scalastyle:off null
     if (app.uris != null) {
       val uriProtos = app.uris.map(uri => {
         CommandInfo.URI.newBuilder()
@@ -209,6 +214,7 @@ object TaskBuilder {
       })
       builder.addAllUris(uriProtos.asJava)
     }
+    //scalastyle:on
 
     app.user.foreach(builder.setUser)
 

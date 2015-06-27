@@ -8,6 +8,9 @@ import javax.net.ssl.{ TrustManagerFactory, SSLContext }
   * Util for create SSLContext objects.
   */
 object SSLContextUtil {
+
+  //scalastyle:off null
+
   /**
     * Create an SSLContext which accepts the certificates in the given key store (if any).
     */
@@ -29,7 +32,7 @@ object SSLContextUtil {
 
     // acquire X509 trust manager from factory
     val context = SSLContext.getInstance("TLS")
-    context.init(/* no key managers */ null, tmf.getTrustManagers, /* no secure random */ null)
+    context.init( /* no key managers */ null, tmf.getTrustManagers, /* no secure random */ null)
     context
   }
 }

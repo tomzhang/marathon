@@ -141,6 +141,8 @@ case class AppDefinition(
     builder.build
   }
 
+  //TODO: fix style issue and enable this scalastyle check
+  //scalastyle:off cyclomatic.complexity method.length
   def mergeFromProto(proto: Protos.ServiceDefinition): AppDefinition = {
     val envMap: Map[String, String] =
       proto.getCmd.getEnvironment.getVariablesList.asScala.map {
@@ -152,14 +154,15 @@ case class AppDefinition(
         r => r.getName -> (r.getScalar.getValue: JDouble)
       }.toMap
 
-    val commandOption =
-      if (proto.getCmd.hasValue && proto.getCmd.getValue.nonEmpty)
-        Some(proto.getCmd.getValue)
+    val argsOption =
+      if (proto.getCmd.getArgumentsCount > 0)
+        Some(proto.getCmd.getArgumentsList.asScala.to[Seq])
       else None
 
-    val argsOption =
-      if (commandOption.isEmpty && proto.getCmd.getArgumentsCount != 0)
-        Some(proto.getCmd.getArgumentsList.asScala.to[Seq])
+    //Precondition: either args or command is defined
+    val commandOption =
+      if (argsOption.isEmpty && proto.getCmd.hasValue && proto.getCmd.getValue.nonEmpty)
+        Some(proto.getCmd.getValue)
       else None
 
     val containerOption =
@@ -378,7 +381,7 @@ object AppDefinition {
     @JsonProperty
     def deployments: Seq[Identifiable] = {
       runningDeployments.collect {
-        case plan if plan.affectedApplicationIds contains app.id => Identifiable(plan.id)
+        case plan: DeploymentPlan if plan.affectedApplicationIds contains app.id => Identifiable(plan.id)
       }
     }
   }
