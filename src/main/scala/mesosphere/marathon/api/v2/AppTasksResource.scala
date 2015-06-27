@@ -11,9 +11,10 @@ import mesosphere.marathon.api.v2.json.EnrichedTask
 import mesosphere.marathon.api.{ EndpointsHelper, RestResource }
 import mesosphere.marathon.health.HealthCheckManager
 import mesosphere.marathon.state.PathId._
-import mesosphere.marathon.state.{ Timestamp, GroupManager, PathId }
+import mesosphere.marathon.state.{ AppDefinition, Timestamp, GroupManager, PathId }
 import mesosphere.marathon.tasks.TaskTracker
 import mesosphere.marathon.{ MarathonConf, MarathonSchedulerService }
+import mesosphere.marathon.Protos.MarathonTask
 
 @Produces(Array(MediaType.APPLICATION_JSON))
 @Consumes(Array(MediaType.APPLICATION_JSON))
@@ -65,20 +66,12 @@ class AppTasksResource @Inject() (service: MarathonSchedulerService,
   def deleteMany(@PathParam("appId") appId: String,
                  @QueryParam("host") host: String,
                  @QueryParam("scale") scale: Boolean = false): Response = {
-    val id = appId.toRootPath
-    if (taskTracker.contains(id)) {
-      val tasks = taskTracker.get(id)
-
-      val toKill = Option(host).fold(tasks) { hostname =>
-        tasks.filter(_.getHost == hostname || hostname == "*")
-      }
-
-      service.killTasks(id, toKill, scale)
-      ok(Map("tasks" -> toKill))
+    val pathId = appId.toRootPath
+    def findToKill(appTasks: Set[MarathonTask]): Set[MarathonTask] = Option(host).fold(appTasks) { hostname =>
+      appTasks.filter(_.getHost == hostname || hostname == "*")
     }
-    else {
-      unknownApp(id)
-    }
+
+    killTasks(pathId, findToKill, scale)
   }
 
   @DELETE
@@ -88,38 +81,46 @@ class AppTasksResource @Inject() (service: MarathonSchedulerService,
                 @PathParam("taskId") id: String,
                 @QueryParam("scale") scale: Boolean = false): Response = {
     val pathId = appId.toRootPath
+    def findToKill(appTasks: Set[MarathonTask]): Set[MarathonTask] = appTasks.find(_.getId == id).toSet
 
+    killTasks(pathId, findToKill, scale)
+  }
+
+  private def killTasks(pathId: PathId,
+                        findToKill: (Set[MarathonTask] => Set[MarathonTask]),
+                        scale: Boolean): Response = {
     import mesosphere.util.ThreadPoolContext.context
 
     if (taskTracker.contains(pathId)) {
       val tasks = taskTracker.get(pathId)
-      tasks.find(_.getId == id).fold(unknownTask(id)) { task =>
-        if (scale) {
-          service.getApp(pathId) match {
-            case Some(app) =>
-              val future = groupManager.group(app.id.parent).map {
-                case Some(group) =>
-                  val newNumInstances: Integer = if (scale) app.instances - 1 else app.instances
-                  val newApp = app.copy(version = Timestamp.now(), instances = newNumInstances)
-                  val deploymentPlan = result(groupManager.updateApp(
-                    pathId, _ => newApp, newApp.version, force = false, toKill = Set(task)))
-                  deploymentResult(deploymentPlan)
+      val toKill = findToKill(tasks)
+      if (scale) {
+        val future = groupManager.group(pathId.parent).map {
+          case Some(group) =>
+            def updateAppFunc(current: AppDefinition) = current.copy(instances = current.instances - toKill.size)
+            val deploymentPlan = result(groupManager.updateApp(
+              pathId, updateAppFunc, Timestamp.now(), force = false, toKill = toKill))
+            deploymentResult(deploymentPlan)
 
-                case None => unknownGroup(app.id.parent)
-              }
-              result(future)
+          case None => unknownGroup(pathId.parent)
+        }
+        result(future)
+      }
+      else {
+        // setting scale = false in order to make the differing behaviour explicit
+        service.killTasks(pathId, toKill, scale = false)
+      }
 
-            case None => unknownApp(pathId)
-          }
-        }
-        else {
-          service.killTasks(pathId, Seq(task), scale = false)
-        }
-        ok(Map("task" -> task))
+      if (toKill.size == 1) {
+        ok(Map("task" -> toKill.head))
+      }
+      else {
+        ok(Map("tasks" -> toKill))
       }
     }
     else {
       unknownApp(pathId)
     }
   }
+
 }

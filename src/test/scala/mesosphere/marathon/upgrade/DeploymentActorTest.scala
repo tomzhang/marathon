@@ -85,9 +85,9 @@ class DeploymentActorTest
     // the AppDefinition is never used, so it does not mater which one we return
     when(repo.store(any())).thenReturn(Future.successful(AppDefinition()))
 
-    when(driver.killTask(TaskID(task1_1.getId))).thenAnswer(new Answer[Status] {
+    when(driver.killTask(TaskID(task1_2.getId))).thenAnswer(new Answer[Status] {
       def answer(invocation: InvocationOnMock): Status = {
-        system.eventStream.publish(MesosStatusUpdateEvent("", "task1_1", "TASK_KILLED", "", app1.id, "", Nil, app1New.version.toString))
+        system.eventStream.publish(MesosStatusUpdateEvent("", "task1_2", "TASK_KILLED", "", app1.id, "", Nil, app1New.version.toString))
         Status.DRIVER_RUNNING
       }
     })
@@ -154,7 +154,7 @@ class DeploymentActorTest
       managerProbe.expectMsg(5.seconds, DeploymentFinished(plan))
 
       verify(scheduler).startApp(driver, app3.copy(instances = 0))
-      verify(driver, times(1)).killTask(TaskID(task1_1.getId))
+      verify(driver, times(1)).killTask(TaskID(task1_2.getId))
       verify(scheduler).stopApp(driver, app4)
     }
     finally {
@@ -274,6 +274,80 @@ class DeploymentActorTest
       )
 
       receiverProbe.expectMsg(DeploymentFinished(plan))
+    }
+    finally {
+      system.shutdown()
+    }
+  }
+
+  test("Scale with tasksToKill") {
+    implicit val system = ActorSystem("TestSystem")
+    val managerProbe = TestProbe()
+    val receiverProbe = TestProbe()
+    val app1 = AppDefinition(id = PathId("app1"), cmd = Some("cmd"), instances = 2, version = Timestamp(0))
+    val origGroup = Group(PathId("/foo/bar"), Set(app1))
+
+    val app1New = app1.copy(instances = 1, version = Timestamp(1000))
+
+    val targetGroup = Group(PathId("/foo/bar"), Set(app1New))
+
+    val task1_1 = MarathonTasks.makeTask("task1_1", "", Nil, Nil, app1.version).toBuilder.setStartedAt(0).build()
+    val task1_2 = MarathonTasks.makeTask("task1_2", "", Nil, Nil, app1.version).toBuilder.setStartedAt(500).build()
+    val task1_3 = MarathonTasks.makeTask("task1_3", "", Nil, Nil, app1.version).toBuilder.setStartedAt(1000).build()
+
+    val plan = DeploymentPlan(original = origGroup, target = targetGroup, toKill = Map(app1.id -> Set(task1_2)))
+
+    when(tracker.get(app1.id)).thenReturn(Set(task1_1, task1_2, task1_3))
+
+    // the AppDefinition is never used, so it does not mater which one we return
+    when(repo.store(any())).thenReturn(Future.successful(AppDefinition()))
+
+    when(driver.killTask(TaskID(task1_1.getId))).thenAnswer(new Answer[Status] {
+      def answer(invocation: InvocationOnMock): Status = {
+        system.eventStream.publish(MesosStatusUpdateEvent("", "task1_1", "TASK_KILLED", "", app1.id, "", Nil, app1New.version.toString))
+        Status.DRIVER_RUNNING
+      }
+    })
+
+    when(driver.killTask(TaskID(task1_2.getId))).thenAnswer(new Answer[Status] {
+      def answer(invocation: InvocationOnMock): Status = {
+        system.eventStream.publish(MesosStatusUpdateEvent("", "task1_2", "TASK_KILLED", "", app1.id, "", Nil, app1New.version.toString))
+        Status.DRIVER_RUNNING
+      }
+    })
+
+    when(driver.killTask(TaskID(task1_3.getId))).thenAnswer(new Answer[Status] {
+      def answer(invocation: InvocationOnMock): Status = {
+        system.eventStream.publish(MesosStatusUpdateEvent("", "task1_3", "TASK_KILLED", "", app1.id, "", Nil, app1New.version.toString))
+        Status.DRIVER_RUNNING
+      }
+    })
+
+    try {
+      TestActorRef(
+        Props(
+          classOf[DeploymentActor],
+          managerProbe.ref,
+          receiverProbe.ref,
+          repo,
+          driver,
+          scheduler,
+          plan,
+          tracker,
+          queue,
+          storage,
+          hcManager,
+          system.eventStream
+        )
+      )
+
+      plan.steps.zipWithIndex.foreach {
+        case (step, num) => managerProbe.expectMsg(5.seconds, DeploymentStepInfo(plan, step, num + 1))
+      }
+
+      managerProbe.expectMsg(5.seconds, DeploymentFinished(plan))
+
+      verify(driver, times(1)).killTask(TaskID(task1_2.getId))
     }
     finally {
       system.shutdown()

@@ -117,17 +117,13 @@ class DeploymentActor(
 
   def scaleApp(app: AppDefinition, scaleTo: Int, toKill: Option[Set[MarathonTask]]): Future[Unit] = {
     val runningTasks = taskTracker.get(app.id)
-    val runningTasksToKill = DeploymentDeathRow(runningTasks, toKill.getOrElse(Set.empty), scaleTo).tasksToBeKilled
-    val runningCount = runningTasks.size
-    val toKillCount = runningTasksToKill.size
-    val toStartCount = scaleTo - runningCount - toKillCount
+    val proposition = ScalingCalculator.scalingProposition(runningTasks, toKill, scaleTo)
 
-    def killTasksIfNeeded: Future[Unit] = if (toKillCount > 0) {
-      killTasks(app.id, runningTasksToKill)
+    def killTasksIfNeeded: Future[Unit] = proposition.tasksToKill.fold(Future.successful(())) {
+      killTasks(app.id, _)
     }
-    else Future.successful(())
 
-    def startTasksIfNeeded: Future[Unit] = if (toStartCount > 0) {
+    def startTasksIfNeeded: Future[Unit] = proposition.tasksToStart.fold(Future.successful(())) { _ =>
       val promise = Promise[Unit]()
       context.actorOf(
         Props(
@@ -144,7 +140,6 @@ class DeploymentActor(
       )
       promise.future
     }
-    else Future.successful(())
 
     killTasksIfNeeded.flatMap(_ => startTasksIfNeeded)
   }
